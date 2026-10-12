@@ -23,16 +23,36 @@
 #
 # Usage: make -f Makefile.vita
 
-TARGET  := GE007Vita
-TITLE   := GEVT00001
+# Region: 'j' for Japan, 'u' for US, 'e' for Europe (default: j)
+REGION ?= j
+
+ifeq ($(REGION), j)
+ASSET_REGION := j
+REGION_DEFS  := -DVERSION_JP -DLANG_JP -DREFRESH_NTSC -DBUGFIX_R1 -DLEFTOVERDEBUG -DLEFTOVERSPECTRUM -DBYTEMATCH
+ROMID        := jpn-final
+TARGET       := GE007Vita_JP
+TITLE        := GEVT00002
+VERSION_PAL  := 0
+else ifeq ($(REGION), e)
+ASSET_REGION := e
+REGION_DEFS  := -DVERSION_EU -DLANG_EU -DREFRESH_PAL -DBUGFIX_R1 -DBUGFIX_R2 -DBYTEMATCH
+ROMID        := pal-final
+TARGET       := GE007Vita_PAL
+TITLE        := GEVT00003
+VERSION_PAL  := 1
+else
+ASSET_REGION := u
+REGION_DEFS  := -DVERSION_US -DLANG_US -DREFRESH_NTSC -DLEFTOVERDEBUG -DLEFTOVERSPECTRUM -DBUGFIX_R0 -DBYTEMATCH
+ROMID        := ntsc-final
+TARGET       := GE007Vita
+TITLE        := GEVT00001
+VERSION_PAL  := 0
+endif
 
 PREFIX  := arm-vita-eabi
 CC      := $(PREFIX)-gcc
 CXX     := $(PREFIX)-g++
 STRIP   := $(PREFIX)-strip
-
-# NTSC-US only — PAL/JP asset gen is broken upstream (issue #85).
-ASSET_REGION := u
 
 # -----------------------------------------------------------------------------
 # Generated headers (CMake normally does this via configure_file())
@@ -54,8 +74,8 @@ $(GEN_DIR)/versioninfo.h: port/include/versioninfo.h.in | $(GEN_DIR)
 	    -e 's|@VERSION_CODENAME@|larkspur|' \
 	    -e 's|@ORIGIN_URL@|https://github.com/jkdansereau/goldeneye-pc-port|' \
 	    -e 's|@TARGET_PLATFORM@|arm-vita|' \
-	    -e 's|@ROMID@|ntsc-final|' \
-	    -e 's|@VERSION_IS_PAL@|0|' \
+	    -e 's|@ROMID@|$(ROMID)|' \
+	    -e 's|@VERSION_IS_PAL@|$(VERSION_PAL)|' \
 	    $< > $@
 
 $(GEN_DIR)/hoststring.h: port/include/hoststring.h.in | $(GEN_DIR)
@@ -130,10 +150,6 @@ INCLUDES := $(GEN_DIR) port/shim . include include/PR src src/game \
 	src/libultra src/libultra/audio port/include \
 	$(VITA_SYSROOT_INCLUDE)/SDL2
 
-# Must match CMakeLists.txt REGION_DEFS for ROMID=ntsc-final (AGENTS.md #3).
-REGION_DEFS := -DVERSION_US -DLANG_US -DREFRESH_NTSC \
-	-DLEFTOVERDEBUG -DLEFTOVERSPECTRUM -DBUGFIX_R0 -DBYTEMATCH
-
 # Not carried over from the PC build's linker flags: -fno-pie /
 # -Wl,-Ttext-segment=0x20000000 / --disable-dynamicbase — no Vita equivalent yet.
 COMMON_FLAGS := -g -Wl,-q,--allow-multiple-definition -O2 -fno-strict-aliasing -funsigned-char -fwrapv \
@@ -141,7 +157,7 @@ COMMON_FLAGS := -g -Wl,-q,--allow-multiple-definition -O2 -fno-strict-aliasing -
 	-include versioninfo.h \
 	$(foreach dir,$(INCLUDES),-I$(dir)) \
 	-D__vita__ -DNDEBUG -fno-short-enums \
-	-DPORT=1 -D_LANGUAGE_C=1 -DAVOID_UB=1 -DPAL=0 $(REGION_DEFS) \
+	-DPORT=1 -D_LANGUAGE_C=1 -DAVOID_UB=1 -DPAL=$(VERSION_PAL) $(REGION_DEFS) \
 	-Wall -Wno-address -Wno-misleading-indentation -Wno-missing-braces \
 	-Wno-multichar -Wno-tautological-compare -Wno-unused-but-set-variable \
 	-Wno-unused-value -Wno-unused-variable \

@@ -1,85 +1,103 @@
 #!/usr/bin/env python3
-"""Emit port/src/pcconv_tables.c: ROM-independent tables for the in-game
-sidecar converter (same inputs and selection rules as d43/d69/d88_emit.py)."""
+"""Emit port/src/pcconv_tables.c: ROM tables for the in-game
+sidecar converter for both US and JP versions."""
 import csv, os, re, sys
 
 TABLE = "assets/obseg/file_resource_table.inc.c"
-FILELIST = "scripts/filelist.u.csv"
 OUT = "port/src/pcconv_tables.c"
 
-fl = {}
-for r in csv.reader(open(FILELIST)):
-    if len(r) < 3 or not r[2]:
-        continue
-    base = r[2].rsplit("/", 1)[-1]
-    if base.endswith(".bin"):
-        base = base[:-4]
-    fl[base] = (int(r[0]), int(r[1]))
+def load_tables_for_region(region):
+    filelist_path = f"scripts/filelist.{region}.csv"
+    fl = {}
+    for r in csv.reader(open(filelist_path, encoding="utf-8", errors="replace")):
+        if len(r) < 3 or not r[2]:
+            continue
+        base = r[2].rsplit("/", 1)[-1]
+        if base.endswith(".bin"):
+            base = base[:-4]
+        fl[base] = (int(r[0]), int(r[1]))
 
-nsnt = {}
-for root, _, files in os.walk("assets"):
-    for fn in files:
-        if fn.lower().endswith("modelfileheader.inc.c"):
-            for line in open(os.path.join(root, fn)):
-                m = re.search(r"MODELFILEHEADER\((.*)\)\s*;?\s*$", line)
-                if not m:
-                    continue
-                a = [x.strip() for x in m.group(1).split(",")]
-                if len(a) < 9:
-                    continue
-                try:
-                    nsnt[a[0]] = (int(a[4], 0), int(a[8], 0))
-                except ValueError:
-                    pass
+    nsnt = {}
+    for root, _, files in os.walk("assets"):
+        for fn in files:
+            if fn.lower().endswith("modelfileheader.inc.c"):
+                for line in open(os.path.join(root, fn), encoding="utf-8", errors="replace"):
+                    m = re.search(r"MODELFILEHEADER\((.*)\)\s*;?\s*$", line)
+                    if not m:
+                        continue
+                    a = [x.strip() for x in m.group(1).split(",")]
+                    if len(a) < 9:
+                        continue
+                    try:
+                        nsnt[a[0]] = (int(a[4], 0), int(a[8], 0))
+                    except ValueError:
+                        pass
 
-names = []
-for line in open(TABLE):
-    m = re.search(r'\{\s*\w+\s*,\s*"([^"]+)"', line)
-    if m:
-        names.append(m.group(1))
+    names = []
+    for line in open(TABLE, encoding="utf-8", errors="replace"):
+        m = re.search(r'\{\s*\w+\s*,\s*"([^"]+)"', line)
+        if m:
+            names.append(m.group(1))
 
-def cands(n):
-    return (n, n[1:], n[:-1], n[1:-1])
+    def cands(n):
+        return (n, n[1:], n[:-1], n[1:-1])
 
-models, cg, setup = [], [], []
-for n in names:
-    if n and n[0] in "CGP" and n.endswith("Z") and "_stan" not in n:
-        key = next((c for c in cands(n) if c in fl), None)
-        if not key:
-            sys.exit(f"{n}: no filelist row")
-        hk = next((c for c in cands(key) if c in nsnt), None)
-        if not hk:
-            sys.exit(f"{n}: no header data")
-        a, s = fl[key]
-        models.append((n, a, s, nsnt[hk][0], nsnt[hk][1]))
-for n in names:
-    if n.startswith("bg/") and n.endswith(".seg"):
-        row = fl.get(n.rsplit("/", 1)[-1][:-4])
-        if row and row[1]:
-            cg.append((n, row[0], row[1], 0))
-    elif (n.startswith("Tbg_") or n == "TbgxZ") and n.endswith("Z"):
+    models, cg, setup = [], [], []
+    for n in names:
+        if n and n[0] in "CGP" and n.endswith("Z") and "_stan" not in n:
+            key = next((c for c in cands(n) if c in fl), None)
+            if not key:
+                sys.exit(f"{n} ({region}): no filelist row")
+            hk = next((c for c in cands(key) if c in nsnt), None)
+            if not hk:
+                sys.exit(f"{n} ({region}): no header data")
+            a, s = fl[key]
+            models.append((n, a, s, nsnt[hk][0], nsnt[hk][1]))
+    for n in names:
+        if n.startswith("bg/") and n.endswith(".seg"):
+            row = fl.get(n.rsplit("/", 1)[-1][:-4])
+            if row and row[1]:
+                cg.append((n, row[0], row[1], 0))
+        elif (n.startswith("Tbg_") or n == "TbgxZ") and n.endswith("Z"):
+            row = fl.get(n)
+            if row and row[1]:
+                cg.append((n, row[0], row[1], 1))
+    for n in sorted(set(x for x in names if x.startswith("Usetup") and x.endswith("Z"))):
         row = fl.get(n)
         if row and row[1]:
-            cg.append((n, row[0], row[1], 1))
-for n in sorted(set(x for x in names if x.startswith("Usetup") and x.endswith("Z"))):
-    row = fl.get(n)
-    if row and row[1]:
-        setup.append((n, row[0], row[1]))
+            setup.append((n, row[0], row[1]))
+    return models, cg, setup
 
-with open(OUT, "w") as f:
+models_u, cg_u, setup_u = load_tables_for_region("u")
+models_j, cg_j, setup_j = load_tables_for_region("j")
+
+with open(OUT, "w", encoding="utf-8") as f:
     f.write("/* Generated by tools_pc/gen_pcconv_tables.py. Do not edit. */\n")
     f.write('#include "pcconv.h"\n\n')
+    f.write("#if defined(VERSION_JP)\n")
     f.write("static const PcConvModel kModels[] = {\n")
-    for n, a, s, ns, nt in models:
+    for n, a, s, ns, nt in models_j:
         f.write(f'    {{"{n}", {a}, {s}, {ns}, {nt}}},\n')
     f.write("};\n\nstatic const PcConvCg kCg[] = {\n")
-    for n, a, s, st in cg:
+    for n, a, s, st in cg_j:
         f.write(f'    {{"{n}", {a}, {s}, {st}}},\n')
     f.write("};\n\nstatic const PcConvSetup kSetup[] = {\n")
-    for n, a, s in setup:
+    for n, a, s in setup_j:
         f.write(f'    {{"{n}", {a}, {s}}},\n')
-    f.write("};\n\nconst PcConvTables kPcConvTables = {\n")
+    f.write("};\n\n#else\n")
+    f.write("static const PcConvModel kModels[] = {\n")
+    for n, a, s, ns, nt in models_u:
+        f.write(f'    {{"{n}", {a}, {s}, {ns}, {nt}}},\n')
+    f.write("};\n\nstatic const PcConvCg kCg[] = {\n")
+    for n, a, s, st in cg_u:
+        f.write(f'    {{"{n}", {a}, {s}, {st}}},\n')
+    f.write("};\n\nstatic const PcConvSetup kSetup[] = {\n")
+    for n, a, s in setup_u:
+        f.write(f'    {{"{n}", {a}, {s}}},\n')
+    f.write("};\n\n#endif\n\n")
+    f.write("const PcConvTables kPcConvTables = {\n")
     f.write("    kModels, (int)(sizeof(kModels) / sizeof(kModels[0])),\n")
     f.write("    kCg, (int)(sizeof(kCg) / sizeof(kCg[0])),\n")
     f.write("    kSetup, (int)(sizeof(kSetup) / sizeof(kSetup[0])),\n};\n")
-print(f"{OUT}: {len(models)} models, {len(cg)} bg/stan, {len(setup)} setups")
+
+print(f"{OUT}: US({len(models_u)} models, {len(cg_u)} bg/stan, {len(setup_u)} setups), JP({len(models_j)} models, {len(cg_j)} bg/stan, {len(setup_j)} setups)")
