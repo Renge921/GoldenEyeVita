@@ -134,6 +134,23 @@ static void gfx_sdl_init(const struct GfxWindowInitSettings *set) {
         sysFatalError("Could not init SDL:\n%s", SDL_GetError());
     }
 
+#if defined(__vita__)
+    /* On Vita, vitaGL manages the GXM context and display buffers directly.
+     * Standard VitaSDK SDL2 video driver (VITA) does not implement OpenGL window/context creation.
+     * We create a standard Vita SDL window without SDL_WINDOW_OPENGL so SDL event polling
+     * and window management continue to work. */
+    wnd = SDL_CreateWindow(set->title, 0, 0, 960, 544, SDL_WINDOW_SHOWN);
+    if (!wnd) {
+        sysFatalError("Could not open SDL window on Vita:\n%s", SDL_GetError());
+    }
+    fullscreen_state = true;
+    fullscreen_flag = SDL_WINDOW_FULLSCREEN;
+    ctx = (SDL_GLContext)1; // dummy non-null context so checks like `if (!wnd || !ctx)` pass
+    qpc_freq = SDL_GetPerformanceFrequency();
+    sysLogPrintf(LOG_NOTE, "SDL: created Vita window (vitaGL context managed natively)");
+    return;
+#endif
+
     // Auto window size: a width/height <= 0 means "pick a sensible default from
     // the desktop" rather than the 640x480 native res. Fit a 4:3 window into
     // ~85% of the primary desktop -- big enough to actually judge mouse/menu
@@ -337,15 +354,14 @@ static void gfx_sdl_set_dimensions(uint32_t width, uint32_t height, int32_t posX
 }
 
 static void gfx_sdl_get_dimensions(uint32_t* width, uint32_t* height, int32_t* posX, int32_t* posY) {
+#if defined(__vita__)
+    *width = 960;
+    *height = 544;
+    if (posX) *posX = 0;
+    if (posY) *posY = 0;
+#else
     SDL_GL_GetDrawableSize(wnd, static_cast<int*>((void*)width), static_cast<int*>((void*)height));
     SDL_GetWindowPosition(wnd, static_cast<int*>(posX), static_cast<int*>(posY));
-#if defined(__vita__)
-    static uint32_t lastW = 1, lastH = 1;
-    if (*width != lastW || *height != lastH) {
-        sysLogPrintf(LOG_INFO, "[video] SDL drawable %ux%u", (unsigned)*width, (unsigned)*height);
-        lastW = *width; lastH = *height;
-    }
-    if (*width == 0 || *height == 0) { *width = 960; *height = 544; } // fixed Vita screen
 #endif
 }
 
@@ -380,7 +396,12 @@ static void gfx_sdl_handle_events(void) {
                 break;
             case SDL_WINDOWEVENT:
                 if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+#if defined(__vita__)
+                    window_width = 960;
+                    window_height = 544;
+#else
                     SDL_GL_GetDrawableSize(wnd, &window_width, &window_height);
+#endif
                     if (!fullscreen_state) {
                         maximized_state = SDL_GetWindowFlags(wnd) & SDL_WINDOW_MAXIMIZED ? true : false;
                     }
@@ -406,6 +427,7 @@ static void gfx_sdl_handle_events(void) {
  * scheduler thread (shedThread) does all rendering. Make the context current
  * there before each frame. extern "C": called from C (port/src/video.c). */
 extern "C" void gfx_sdl_make_context_current(void) {
+#if !defined(__vita__)
     if (wnd && ctx) {
         /* Note: SDL2's MakeCurrent return value is unreliable on this MinGW
          * toolchain (ABI artifact), so we don't branch on it. A genuine bind
@@ -413,12 +435,16 @@ extern "C" void gfx_sdl_make_context_current(void) {
          * compile failure, which is far louder. */
         SDL_GL_MakeCurrent(wnd, ctx);
     }
+#endif
 }
 
 /* D344: called on the render thread when a quit was requested, at a frame
  * boundary: wait for the GPU to drain everything this process queued, then
  * unbind the context, so process teardown never lands inside the driver. */
 extern "C" void gfx_sdl_park_for_exit(void) {
+#if defined(__vita__)
+    glFinish();
+#else
     if (ctx && SDL_GL_GetCurrentContext() == ctx) {
         typedef void (SDLCALL *FinishFn)(void);   // = APIENTRY on Windows
         FinishFn finish = (FinishFn)SDL_GL_GetProcAddress("glFinish");
@@ -427,6 +453,7 @@ extern "C" void gfx_sdl_park_for_exit(void) {
         }
         SDL_GL_MakeCurrent(NULL, NULL);
     }
+#endif
 }
 
 /* Release the GL context from the calling (host main) thread. WGL only allows
@@ -435,9 +462,11 @@ extern "C" void gfx_sdl_park_for_exit(void) {
  * in use" (SDL2 reports this via SDL_GetError). The host thread must release
  * after init so the game's scheduler thread can bind it per frame. */
 extern "C" void gfx_sdl_release_context(void) {
+#if !defined(__vita__)
     if (ctx) {
         SDL_GL_MakeCurrent(NULL, NULL);
     }
+#endif
 }
 
 /* The host thread owns SDL event pumping (see videoPumpEvents); when it sees
@@ -445,7 +474,12 @@ extern "C" void gfx_sdl_release_context(void) {
  * fast3d uses for scaling. */
 extern "C" void gfx_sdl_update_cached_size(void) {
     if (wnd) {
+#if defined(__vita__)
+        window_width = 960;
+        window_height = 544;
+#else
         SDL_GL_GetDrawableSize(wnd, &window_width, &window_height);
+#endif
     }
 }
 
@@ -518,7 +552,7 @@ static void gfx_sdl_swap_buffers_begin(void) {
     if (gfx_pre_swap_hook) {
         gfx_pre_swap_hook();
     }
-    SDL_GL_SwapWindow(wnd);
+    vglSwapBuffers(vsync_enabled ? GL_TRUE : GL_FALSE);
     s_tSwap += sceKernelGetProcessTimeWide() - t1;
 #else
     if (target_fps) {
@@ -573,20 +607,27 @@ static void gfx_sdl_set_window_title(const char *title) {
 }
 
 static int gfx_sdl_get_swap_interval(void) {
+#if defined(__vita__)
+    return s_vitaWantInterval;
+#else
     return SDL_GL_GetSwapInterval();
+#endif
 }
 
 static bool gfx_sdl_set_swap_interval(int interval) {
 #if defined(__vita__)
     s_vitaWantInterval = interval;
     if (interval == 1 && target_fps > 0 && target_fps <= 30) interval = 2;   /* 30 cap: every other vblank */
-#endif
+    vsync_enabled = (interval != 0);
+    return true;
+#else
     const bool success = SDL_GL_SetSwapInterval(interval) >= 0;
     vsync_enabled = success && (interval != 0);
     if (!success) {
         sysLogPrintf(LOG_WARNING, "SDL: failed to set vsync %d: %s", interval, SDL_GetError());
     }
     return success;
+#endif
 }
 
 int gfx_sdl_get_display_mode(int modenum, int *out_w, int *out_h) {
