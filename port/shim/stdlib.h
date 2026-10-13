@@ -13,7 +13,7 @@
  *
  * Inert in the N64 build (port/shim is not on its include path).
  */
-#if defined(__cplusplus)
+#if defined(__cplusplus) || defined(PORT_HOSTSTDLIB_H) || defined(_INC_STDLIB)
 #include "hoststdlib.h"
 #else
 #include "include/stdlib.h"
