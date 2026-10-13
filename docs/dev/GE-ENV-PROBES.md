@@ -33,7 +33,7 @@ Two classes:
 | `GE_PULLTRACE` | `src/libultra/audio/load.c` (`alAdpcmPull`) | `[PASTEND]` assertion: fires if a voice's `f->sample` exceeds its wave's total samples while `nOver == 0` (i.e. an unstopped voice keeps decoding past the end instead of zero-filling). Rate-limited to 40 lines. M-65: 0 hits — exhausted voices go silent correctly. | **live** (D202) |
 | `GE_DMEMWIPE` | `port/src/mixer.c` (`aClearBufferImpl`) | Zeroes the whole software DMEM at the frame boundary (detected as `alMainBusPull`'s clear of `AL_MAIN_L_OUT`, addr 1088). Tests whether audio state survives across frames in DMEM. M-65: no-op on output — ruled out. | **live** (D202) |
 | `GE_NOWET` | `port/src/mixer.c` (`aSetVolumeImpl`) | Mutes the reverb send (`wetamt = 0`), isolating the reverb delay lines as a possible source of persistent signal. M-65: drone unchanged — ruled out (NB `aPoleFilterImpl` is still an unimplemented no-op, D199). | **live** (D202) |
-| `GE_OBJT` | `src/game/chraction.c` (`chrSetStageFlags`/`chrUnsetStageFlags`), `src/game/propobj.c` (GAS_RELEASING destruction) | D321 stage-flag writer probe: logs every low-16-bit write to `objectiveregisters1` (tick, writing chr, actiontype/aioffset, AI-list ID) plus each toxic-gas prop destruction timestamp — used to map the Facility tanks→combat-bit trigger chain. Capped, read-only, inert unset; post-release removal candidate (M-192 item 7). | **live** (D321) |
+| `GE_OBJT` | `src/game/chraction.c`, `src/game/propobj.c` | D321 stage-flag writer probe: mapped Facility tanks->combat-bit trigger chain. | **dead** (removed in upstream cleanup — tombstone) |
 | `GE_BANKDUMP` | `port/src/romdata.c` | `BANKSRC` lines: the source ROM-layout bank tree per `soundIndex` (instrument → sound → envelope pointers + `decayTime`). Used to prove sound 203's `decay=-1` is genuine ROM data, not a conversion bug. One-shot at load. | **live** (D202) |
 | `GE_FORCEALARM` | `src/game/propobj.c` (`handle_alarm_gas_timer_calldamage`, `#ifdef PORT`) | **D207 diag (temporary).** Forces the in-game alarm klaxon (`alarmActivate`) on a frame counter — on ~2–10 s, off, on again — and emits a per-frame `[D207] f=… active=… ptr_alarm_sfx=… playstate=… locked=…` line to `audiotrace.log`. Repro harness for the "alarm SFX overrides other audio" report when a level's own alarm can't be triggered headlessly. Remove when D207 closes. | **live** (D207) — temporary |
 | `GE_KEYMAPDUMP` | `port/src/romdata.c` | `KEYMAP` + `ENVSRC` lines: raw source bytes of every `ALKeyMap` / `ALEnvelope` in the ROM-layout blob, for byte-wise comparison against runtime values. One-shot at load. | **live** (D202) |
@@ -64,14 +64,36 @@ Two classes:
 | `GE_TEXDUMP` | `port/fast3d/gfx_pc.cpp:1020`, `port/fast3d/gfx_opengl.cpp:700` | PPM dump of every uploaded texture + a `fmt/siz/palfmt/palidx/pal[0..3]` line. Root-caused D161 (Depot ceiling). Kept as an inert diagnostic. | **live** (RC3 not finished) |
 | `GE_D116` | `port/fast3d/gfx_pc.cpp:1710,2362`, `src/game/textrelated.c:265,541` (cached `ge_d116`) | HUD/text "X-mirror" (D114/D116) vbo/uv trace. **D114/D116 CLOSED — NOT A BUG (M-33/D168): the captures were upside-down, not mirrored.** Probe is now dead scaffolding — strip on the next cleanup pass. | dead (D114/D116 closed) |
 | `GE_D288` | `port/fast3d/gfx_pc.cpp` (`gfx_sp_tri1`, right after the D233 trivial-reject guard; cached `ge_d288`) | M-152 diag for the Silo intro stray triangle: logs any triangle whose clip-space NDC bbox covers >15% of the screen or goes non-finite, with each vertex's `w` and `any_behind_camera`. **Investigation in progress** — narrowed to two candidates (an unguarded `w`-division NaN leak in the backface-cull test just below, or the D106/D271 portal-BFS family), not yet root-caused; needs a live/headless `-level_20` run to disambiguate. | **live** (D288) |
-| `GE_D236RM` | `port/fast3d/gfx_pc.cpp` (`gfx_sp_tri1`, unconditional getenv, no state kept when unset) | M-155/pass-10 diag for D236: per-frame (`num_dls`) triangle count of the `0x0c184b50` render-mode class (`other_mode_l` exact match), heartbeat-logged every 300 frames even at zero. **REFRAMED D280's "run-to-run dependent instantiation" as ordinary room-based occlusion**, not a CPU-side gating bug — see `## D236` pass-10 writeup. | **live** (D236 OPEN, kept for future passes) |
-| `GE_D236ORDER` | `port/fast3d/gfx_pc.cpp:1844` (`gfx_sp_tri1`, cached `s_d236order`) | D236 pass-12 diag: per-DL sequence log of the tree-class triangles (DL index, screen-space depth, noise min/max census) to test the draw-order hypothesis. Zero cost unset; remove once D236 concludes. | **live** (D236 OPEN) |
-| `GE_D236ALPHA` | `port/fast3d/gfx_pc.cpp:1896` (`gfx_sp_tri1`, cached `s_d236alpha`) | D236 pass-14 diag: for the `0x0c184b50` tree-class render mode, logs the combine/alpha state of up to 4000 matching triangles (deduped on combine change) so the captured draw can be cross-checked against the source. Zero cost unset; remove once D236 concludes. | **live** (D236 OPEN) |
-| `GE_D236ZFIX` | `port/fast3d/gfx_pc.cpp:1970` (`gfx_sp_tri1`, cached `s_d236zfix`) | D236 pass-12 test override: forces `depth_update=true` for the `0x0c184b50` tree-class render mode — a cheap mechanism test before deciding what a real fix looks like. Off by default; remove once D236 concludes. | **live, test-only** (D236 OPEN) |
-| `GE_D236RAW` | `src/game/bg.c:2437` (`#ifdef PORT`) | D236 pass-16 diag: one-shot census of the raw vertex table's alpha-byte distribution (5 buckets + min/max), camera-independent, to check whether any vertex in the whole table exceeds the low ceiling. Zero cost unset; remove once D236 concludes. | **live** (D236 OPEN) |
+| `GE_D236RM` | `port/fast3d/gfx_pc.cpp` | M-155/pass-10 diag for D236: per-frame triangle count of render-mode class. | **dead** (removed in upstream cleanup — tombstone) |
+| `GE_D236ORDER` | `port/fast3d/gfx_pc.cpp` | D236 pass-12 diag: per-DL sequence log of tree-class triangles. | **dead** (removed in upstream cleanup — tombstone) |
+| `GE_D236ALPHA` | `port/fast3d/gfx_pc.cpp` | D236 pass-14 diag: tree-class render mode combine/alpha state log. | **dead** (removed in upstream cleanup — tombstone) |
+| `GE_D236ZFIX` | `port/fast3d/gfx_pc.cpp` | D236 pass-12 test override: depth_update=true for tree-class render mode. | **dead** (removed in upstream cleanup — tombstone) |
+| `GE_D236RAW` | `src/game/bg.c` | D236 pass-16 diag: raw vertex table alpha-byte distribution census. | **dead** (removed in upstream cleanup — tombstone) |
 | `GE_D245V` | `src/game/sky.c:962` (`skyPortRenderPoly`-adjacent, `#ifdef PORT`) | D245 water-seam diag: per-call min/max of the recomputed S/T texture-coordinate ranges for the water fan vertices (rate-limited), to check whether the seam tracks a tc-shift boundary. Inert unset. | **live** (D245 OPEN) |
 | `GE_D245_FIXEDSHIFT` | `src/game/sky.c:946` (`#ifdef PORT`) | D245 test override: pins the water tc shift `k` to the given integer (0..SKY_TC_MAX_SHIFT) instead of the computed per-vertex value, to A/B the allowShift=TRUE behavior. Off by default (unset = current behavior). | **live, test-only** (D245 OPEN) |
 | `GE_D252` | `port/fast3d/gfx_pc.cpp:733` (`import_texture`, cached `s_d252`) | D252 rainbow-particle diag: one-shot per (address,size) import log of the tile state (tmem/fmt/siz/addr/size/line) for small textures so a suspect particle tile can be checked against its source bytes by hand. Remove once D252 is resolved. | **live** (D252 OPEN — non-reproducible) |
+| `GE_AIMLOG` | `port/src/input.c:2231` | D337: per-poll aim-model telemetry trace (sight aim, crosshair position, screen coords). | **live** (D337) |
+| `GE_BINDCAPTUREACTION` | `port/src/optionsoverlay.c:1088` | Target action key name for `GE_BINDCAPTUREPROBE` (defaults to `Input.Bind.Fire`). | **live** |
+| `GE_BINDCAPTUREPROBE` | `port/src/optionsoverlay.c:1083` | D383 isolated host->menu keybinding capture probe (`ESC`, `DEL`, `F2`, `MOUSE5`). | **live** |
+| `GE_BINDPROBE` | `port/src/input.c:871` | Runs `inputBindingProbe()` at input init to verify PC key bindings. | **live** |
+| `GE_FOOTERPROBE` | `port/src/optionsoverlay.c:2366` | D383 options overlay footer text width/metrics overflow check. | **live** |
+| `GE_FRONTNAVLOG` | `port/src/frontoptions.c:435,580` | Logs navigation and selection events in frontoptions menu. | **live** |
+| `GE_FRONTOPTIONS_AUTO` | `port/src/frontoptions.c:828` | D406 test hook: auto-enters PC options screen in file-select menu without clicking. | **live** |
+| `GE_FRONTOPTIONS_SECTION` | `port/src/frontoptions.c:300` | Isolated headless screenshot of a nested options section/page. | **live** |
+| `GE_FRONTOPTS_WIDTHS` | `port/src/frontoptions.c:680` | D406b one-shot label metrics and width log for front options layout diagnostics. | **live** |
+| `GE_OPTIONSOVERLAY_SECTION` | `port/src/optionsoverlay.c:1072` | Isolated screenshot/probe of a nested options page. | **live** |
+| `GE_OPTIONSOVERLAY_SELECTBACK` | `port/src/optionsoverlay.c:1078` | Screenshot-only selection state to check pinned Back row against selected setting. | **live** |
+| `GE_OPTIONTREEPROBE` | `port/src/optionsoverlay.c:971` | D388 opt-in in-memory walk of the real F10 options page tree. | **live** |
+| `GE_OVPOINTERMAP` | `port/src/optionsoverlay.c:1842` | D391 diagnostic: logs mouse pointer mapping vs GL drawable pixel coordinates. | **live** |
+| `GE_PDMOUSEAIM` | `port/src/input.c:494` | Forces Perfect Dark mouse aim integration (`0`/`1`) at launch. | **live** |
+| `GE_QUITFRAME` | `port/src/video.c:1003` | D344: clean self-quit when frame count reaches `n` (replaces timeout kills in test harness). | **live** |
+| `GE_ROOMPOOL` | `port/src/video.c:380` | Overrides computed room pool scale (float 0.25..2.0) to test pool exhaustion / widescreen. | **live** |
+| `GE_STARTWEAPON` | `src/game/bondview_r.c:406` | TEMP D303 (M-201): sets starting weapon ID (`ITEM_IDS`) for headless repros. | **live** |
+| `GE_WSPROBE` | `port/src/watchsettings.c:616` | D354 probe: logs before/after queued watchsettings commit at specified tick. | **live** |
+| `GE_WSPROBE_F10FRONT` | `port/src/optionsoverlay.c:1679` | D361 probe on controller poll thread: queues Music+FX change from file select. | **live** |
+| `GE_WSPROBE_FRONT` | `port/src/watchsettings.c:568` | D354 probe: exercises front-end chooser-default write path headlessly at `<tick>`. | **live** |
+| `GE_WSPROBE_RESET` | `port/src/watchsettings.c:512` | D356: drives reset UI dispatch (arm -> confirm -> handler) through optionsoverlay hooks. | **live** |
+
 
 ## Dxx diagnostic probes — finding closed unless noted
 
@@ -112,6 +134,18 @@ Two classes:
 | `GE_D318T` | `port/src/d318watchdog.c:270` (`#ifdef PORT`) | D318 watchdog timeline probe: per-tick log of the Facility ai_22 softlock signature window (c78 list/offset/attack state, c67 health) while the watchdog watches. Inert unset. | **live** (D318 verification) |
 | `GE_D322` | `port/src/audio.c` (`audioSetNextBuffer`), `src/snd.c` (`sndD322PoolSummary`) | D322 pool-telemetry probe: one line per 5 s of wall clock with the three pool layers a long session can exhaust — `sfx=count/max` (8-voice SFX soft cap), `evtq=n/64` (event queue occupancy; full = silent post drops, M-71), `pv free/lame/alloc` (24 physical synth voices shared by SFX + music; `-1`s before sndInit), plus the D204 pipeline fields. Cheap (~30 reads/s), campaign-safe; read together with `GE_D204=1`. | **live** (D322 capture) |
 | `GE_D318W` | `port/src/d318watchdog.c:136` (`#ifdef PORT`) | **Not a probe — the D318 port-side watchdog itself, ON by default.** Detects the Facility ai_22 hold-pose softlock signature (a latent N64 race, see findings.md D318) for 600 consecutive ticks and re-seeds c78's attack via the game's own fresh-attack entry point. `GE_D318W=0` opts out; logs `D318W:` lines when it acts. **Permanent fix, not strip-candidate.** | **live** (D318 fix — permanent) |
+| `GE_D235` | `src/boss.c:496` | Logs count of stale texture cache entries purged at level load (`videoResetTextureCache`). | **live** (D235) |
+| `GE_D245_OLDTEX` | `port/fast3d/gfx_pc.cpp:1415,2221` | D245 (M-201): restores uploading whole CI8 mip chain instead of base level for RGBA16-over-CI8 water. | **live** (D245 A/B) |
+| `GE_D245_OLDVTX` | `src/game/sky.c:2010` | Restores pre-D245 sky vertex translation behavior. | **live** (D245 A/B) |
+| `GE_D252POOL` | `src/game/image.c:2585,2595`, `port/src/gimgfixup.c:162` | Logs texture pool free bytes on load and pool-full events to test exhaustion hypothesis. | **live** (D252) |
+| `GE_D318B` | `port/src/d318bprobe.c:91` | D318 follow-up probe: logs Facility chr AI execution state for comma-separated chr IDs. | **live** (D318) |
+| `GE_D318B_ALL` | `port/src/d318bprobe.c:97` | With `GE_D318B`, logs all ticks instead of state-change transitions only. | **live** (D318) |
+| `GE_D318B_CLK` | `port/src/d318bprobe.c:210` | With `GE_D318B`, locks simulation clock delta to `n` ticks/frame. | **live** (D318) |
+| `GE_D329` | `src/game/model.c:3594` | Anim frame boundary stepping fix (`=0` disables for A/B testing). | **live** (D329) |
+| `GE_D329LOG` | `src/game/model.c:3597` | Logs each D329 anim boundary step adjustment. | **live** (D329) |
+| `GE_DYNTEXHASH_OFF` | `port/fast3d/gfx_pc.cpp:1156` | Disables FNV-1a content hashing for dynamic textures in vertex buffers (A/B testing). | **live** |
+| `GE_TEXDUMP_ADDR` | `port/fast3d/gfx_pc.cpp:1327` | Hex address filter: raw-dumps every texture import from specified address. | **live** |
+
 
 ## Notes
 

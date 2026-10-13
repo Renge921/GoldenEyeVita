@@ -23,7 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "docs" / "dev" / "GE-ENV-PROBES.md"
 SCAN_DIRS = ["src", "port"]
-GETENV_RE = re.compile(r'getenv\(\s*"(GE_[A-Z0-9_]+)"\s*\)')
+GETENV_RE = re.compile(r'(?:getenv|GE_ENVFLAG|GE_ENVSTR)\(\s*"(GE_[A-Z0-9_]+)"\s*\)')
 
 
 def live_sites() -> dict[str, list[str]]:
