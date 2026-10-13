@@ -52,15 +52,12 @@ done <<'PACKAGES'
 a95d46d74f6e7acab5986592aec2432f8395af0975551d29dfe9a04421e25184 libmathneon-0.0.0.r11.g0faab81-1-vita.pkg.tar.xz
 443f8e9820cf7196f0071deb59edad0cad17cae1ce64e8fceb1270cc705dbffb SceShaccCgExt-1.0.1-1-vita.pkg.tar.xz
 53199dac0bfec090dd9eb9a8f438b8ee5641cedac269cc7518872f318ab748ee sdl2-2.32.8-1-vita.pkg.tar.xz
+e5b601fe333edb3781c0821c8ea168448d0edb0195362fb391d60e2c0e5d423c zlib-1.3.2-2-vita.pkg.tar.xz
 PACKAGES
 
 # Install only verified local archives; do not refresh a floating SDK channel.
 vdpm pacman -- -U --noconfirm --noscriptlet "${package_paths[@]}"
 
-# Ensure zlib is available in VitaSDK sysroot
-if [[ ! -s "$VITASDK/arm-vita-eabi/lib/libz.a" ]]; then
-    vdpm zlib
-fi
 
 fetch_commit() {
     local url="$1" commit="$2" directory="$3"
@@ -85,10 +82,12 @@ vitagl_root="$work/vitagl-root"
 install -d "$vitagl_root"
 install -m 644 "$work/vitaGL/libvitaGL.a" "$vitagl_root/libvitaGL.a"
 install -m 644 "$work/vitaGL/source/vitaGL.h" "$vitagl_root/vitaGL.h"
-for library in vitaGL vitashark SceShaccCgExt taihen_stub mathneon SDL2; do
+for library in vitaGL vitashark SceShaccCgExt taihen_stub mathneon SDL2 z; do
     test -s "$VITASDK/arm-vita-eabi/lib/lib${library}.a"
 done
 test -s "$VITASDK/arm-vita-eabi/include/SDL2/SDL.h"
+test -s "$VITASDK/arm-vita-eabi/include/zlib.h"
+
 
 {
     printf 'VITASDK=%s\n' "$VITASDK"
