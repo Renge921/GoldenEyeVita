@@ -1628,6 +1628,7 @@ void interface_menu17_switchscreens(void)
     g_MenuTimer++;
     if ((g_MenuTimer >= 4) && (!spectrum_related_flag) && (!is_emulating_spectrum))
     {
+        osSyncPrintf("[front] interface_menu17_switchscreens ready: menu_update=%d\n", menu_update);
         maybe_prev_menu = menu_update;
         menu_update = MENU_INVALID;
     }
@@ -2070,6 +2071,10 @@ void disable_all_switches(Model *arg0)
     s32 i;
     ModelNode *mnode;
 
+    if (!arg0 || !arg0->obj) {
+        return;
+    }
+
     for (i = 0; i < arg0->obj->numSwitches; i++)
     {
         mnode = arg0->obj->Switches[i];
@@ -2089,6 +2094,12 @@ void disable_all_switches(Model *arg0)
 
 void set_item_visibility_in_objinstance(Model* objinstance, s32 item, s32 mode)
 {
+    if (!objinstance || !objinstance->obj) {
+        return;
+    }
+    if (item < 0 || item >= objinstance->obj->numSwitches) {
+        return;
+    }
     if (objinstance->obj->Switches[item] != NULL)
     {
         ModelRwData_SwitchRecord *rwdata = &modelGetNodeRwData(objinstance, objinstance->obj->Switches[item])->Switch;
@@ -6726,8 +6737,11 @@ void init_menu0A_briefing(void)
 
 void update_menu0A_briefing(void)
 {
+  osSyncPrintf("[front] update_menu0A_briefing: page=%d stage=%d menu_update=%d\n",
+               briefingpage, mission_folder_setup_entries[briefingpage].stage_id, menu_update);
   langClearBank(langGetLangBankIndexFromStagenum(mission_folder_setup_entries[briefingpage].stage_id));
   if (-1 < menu_update) {
+    osSyncPrintf("[front] update_menu0A_briefing: frontCleanUpWalletBond\n");
     frontCleanUpWalletBond();
   }
 }
@@ -6764,6 +6778,8 @@ void interface_menu0A_briefing(void)
     }
     if (joyGetButtonsPressedThisFrame(PLAYER_1, START_BUTTON))
     {
+        osSyncPrintf("[front] START pressed on briefing: stage=%d diff=%d page=%d\n",
+                     selected_stage, selected_difficulty, briefingpage);
         tab_next_selected = TRUE;
         sndPlaySfx(g_musicSfxBufferPtr, DOOR_METAL_CLOSE2_SFX, NULL);
     }
@@ -6786,6 +6802,8 @@ void interface_menu0A_briefing(void)
         }
         else if (tab_start_highlight)
         {
+            osSyncPrintf("[front] A-button START tab pressed on briefing: stage=%d diff=%d page=%d\n",
+                         selected_stage, selected_difficulty, briefingpage);
             tab_next_selected = TRUE;
         }
         sndPlaySfx(g_musicSfxBufferPtr, DOOR_METAL_CLOSE2_SFX, NULL);
@@ -7016,6 +7034,7 @@ Gfx *constructor_menu0A_briefing(Gfx *DL)
 //********************************************************************************************************
 void init_menu0B_runstage(void)
 {
+    osSyncPrintf("[front] init_menu0B_runstage: stage=%d diff=%d\n", selected_stage, selected_difficulty);
     bossSetLoadedStage(selected_stage);
     lvlSetSelectedDifficulty(selected_difficulty);
 }
@@ -8636,6 +8655,7 @@ Gfx * constructor_menu19_spectrum(Gfx * DL)
 
 void frontChangeMenu(MENU menu, s32 reload)
 {
+    osSyncPrintf("[front] frontChangeMenu: menu=%d reload=%d\n", (int)menu, reload);
     if ((menu == MENU_RUN_STAGE) || (menu == MENU_SPECTRUM_EMU))
     {
         is_emulating_spectrum = TRUE;

@@ -100,6 +100,7 @@ void sysLogPrintf(enum LogLevel level, const char *fmt, ...)
     if (n > (int)sizeof(line) - 2) n = (int)sizeof(line) - 2;
     line[n++] = '\n';
     fwrite(line, 1, (size_t)n, stderr);
+    fflush(stderr);
 }
 
 void sysFatalError(const char *fmt, ...)

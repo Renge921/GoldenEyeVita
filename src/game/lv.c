@@ -335,6 +335,7 @@ void lvlStageLoad(s32 stage)
     s32 i;
     struct player_data *player_data;
 
+    osSyncPrintf("[lvl] lvlStageLoad enter: stage=%d\n", stage);
     g_CurrentStageToLoad = stage;
 
     // this if block pushes where g_CurrentStageToLoad gets loaded to the
@@ -382,14 +383,18 @@ void lvlStageLoad(s32 stage)
     musicTrack3ApplySeqpVol(VOLUME_MAX);
     sub_GAME_7F0C1364();
     modelmgrSetLevelResetting(TRUE);
+    osSyncPrintf("[lvl] before set_mt_tex_alloc\n");
     set_mt_tex_alloc();
 #ifdef VERSION_EU
     bullet_moving_sparks_reset();
 #else
     bullet_sparks_reset_all();
 #endif
+    osSyncPrintf("[lvl] before texReset\n");
     texReset();
+    osSyncPrintf("[lvl] before load_font_tables\n");
     load_font_tables();
+    osSyncPrintf("[lvl] after load_font_tables\n");
 
     /* If title screen, initialize screen and folder setup.
     * Otherwise:
@@ -464,6 +469,7 @@ void lvlStageLoad(s32 stage)
     }
     else
     {
+        osSyncPrintf("[lvl] gameplay stage: before load_bg_file(%d)\n", g_CurrentStageToLoad);
         g_NewCheatUnlocked = 0;
 
         if ((g_CurrentStageToLoad != LEVELID_TITLE) && (D_80048394 == 0) && (g_ClockTimer > 0))
@@ -1684,6 +1690,7 @@ void lvlViewMoveTick(void)
 
 void lvlUnloadStageTextData(void)
 {
+    osSyncPrintf("[lvl] lvlUnloadStageTextData enter: current=%d\n", g_CurrentStageToLoad);
     if (g_MpSoundStateRelated != NULL)
     {
         if (sndGetPlayingState(g_MpSoundStateRelated) != AL_STOPPED)
@@ -1699,18 +1706,29 @@ void lvlUnloadStageTextData(void)
     }
 
     cheatDisableAllCheats();
+    osSyncPrintf("[lvl] unload: cleanupGuardData\n");
     cleanupGuardData();
+    osSyncPrintf("[lvl] unload: cleanupObjectSounds\n");
     cleanupObjectSounds();
+    osSyncPrintf("[lvl] unload: cleanupExplosions\n");
     cleanupExplosions();
+    osSyncPrintf("[lvl] unload: cleanup_window_pieces\n");
     cleanup_window_pieces();
     cleanup_REMOVED_();
+    osSyncPrintf("[lvl] unload: cleanupAlarms\n");
     cleanupAlarms();
+    osSyncPrintf("[lvl] unload: cleanupObjects(%d)\n", g_CurrentStageToLoad);
     cleanupObjects(g_CurrentStageToLoad);
+    osSyncPrintf("[lvl] unload: cleanupObjectives\n");
     cleanupObjectives();
+    osSyncPrintf("[lvl] unload: cleanupSFXRelated\n");
     cleanupSFXRelated();
+    osSyncPrintf("[lvl] unload: cleanupplayersoundrelated\n");
     cleanupplayersoundrelated();
     set_missionstate_zero();
+    osSyncPrintf("[lvl] unload: cleanup_rooms\n");
     cleanup_rooms();
+    osSyncPrintf("[lvl] lvlUnloadStageTextData exit\n");
 }
 
 

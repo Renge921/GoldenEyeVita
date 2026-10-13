@@ -39,6 +39,7 @@ unsigned char *tokenSplit(unsigned char *str)
 
 // Sets a new token string.
 void tokenSetString(const char *str) {
+    if (!str) return;
     strcpy(g_TokenString, str);
     tokenSplit(g_TokenString);
 }

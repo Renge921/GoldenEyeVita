@@ -418,6 +418,7 @@ void bossMainloop(void)
         pendingGfx = 0;
 
         test_if_recording_demos_this_stage_load(g_StageNum, lvlGetSelectedDifficulty());
+        osSyncPrintf("[boss] outer loop load stage: g_StageNum=%d\n", g_StageNum);
         if (g_DebugAndUpdateStageFlag)
         {
             stringIndex = -1;
@@ -462,9 +463,16 @@ void bossMainloop(void)
                 }
             }
 
-            tokenSetString(memallocstringtable[stringIndex].string);
+            osSyncPrintf("[boss] stringIndex=%d string=%s\n",
+                         stringIndex, memallocstringtable[stringIndex].string ? memallocstringtable[stringIndex].string : "NULL");
+            if (memallocstringtable[stringIndex].string != NULL) {
+                tokenSetString(memallocstringtable[stringIndex].string);
+            } else {
+                tokenSetString("-ml0 -me0 -mgfx100 -mvtx50 -mt700 -ma400");
+            }
         }
 
+        osSyncPrintf("[boss] mempResetBank MEMPOOL_STAGE\n");
         mempResetBank(MEMPOOL_STAGE);
         obBlankResourcesLoadedInBank(MEMPOOL_STAGE);
         if (tokenFind(1, "-ma"))
@@ -472,6 +480,7 @@ void bossMainloop(void)
             g_CurentMaMallocValue = (s32) (strtol(tokenFind(1, "-ma"), NULL, 0) * 1024);
         }
 
+        osSyncPrintf("[boss] memaReset ma=%d\n", g_CurentMaMallocValue);
         memaReset(mempAllocBytesInBank(g_CurentMaMallocValue, MEMPOOL_STAGE), g_CurentMaMallocValue);
         reset_play_data_ptrs();
 #ifdef PORT
@@ -499,6 +508,7 @@ void bossMainloop(void)
             if (ge_d235)
                 osSyncPrintf("D235: stage=%d texcache entries purged at load=%d\n",
                              (s32)g_StageNum, gfx_texture_cache_count());
+            osSyncPrintf("[boss] videoResetTextureCache\n");
             videoResetTextureCache();
         }
 #endif
@@ -513,10 +523,14 @@ void bossMainloop(void)
             }
         }
 
+        osSyncPrintf("[boss] init_player_data_ptrs_construct_viewports (%d)\n", localSelectedNumPlayers);
         init_player_data_ptrs_construct_viewports(localSelectedNumPlayers);
+        osSyncPrintf("[boss] dynInitMemory\n");
         dynInitMemory();
         joyCheckStatusThreadSafe();
+        osSyncPrintf("[boss] calling lvlStageLoad(%d)\n", g_StageNum);
         lvlStageLoad(g_StageNum);
+        osSyncPrintf("[boss] lvlStageLoad(%d) returned\n", g_StageNum);
         viInitBuffers();
         debmenuRefresh();
         waitForNextFrame();
@@ -779,7 +793,10 @@ void bossMainloop(void)
             }
         }
 
+        osSyncPrintf("[boss] inner loop broke: g_MainStageNum=%d, pendingGfx=%u\n", g_MainStageNum, pendingGfx);
+        osSyncPrintf("[boss] lvlUnloadStageTextData begin\n");
         lvlUnloadStageTextData();
+        osSyncPrintf("[boss] lvlUnloadStageTextData done\n");
         stop_demo_playback();
         mempNullNextEntryInBank(MEMPOOL_STAGE);
         obBlankResourcesLoadedInBank(MEMPOOL_STAGE);
