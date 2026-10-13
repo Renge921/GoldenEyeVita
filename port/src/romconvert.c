@@ -232,9 +232,17 @@ int romConvertEnsureSidecars(const unsigned char *romImg, unsigned int romSize,
         return 1;
     if (rcSidecarsPresent(region))
         return 1;
-    /* The converter tables are built from the US ROM's file list. */
-    if (strcmp(region, "ntsc-final")) {
-        sysLogPrintf(LOG_ERROR, "romconvert: only the US ROM is supported on Vita");
+    /* Check that the ROM region matches this executable's build target */
+#if defined(VERSION_JP)
+    const char *expected = "jpn-final";
+#elif GE007_IS_PAL
+    const char *expected = "pal-final";
+#else
+    const char *expected = "ntsc-final";
+#endif
+    if (strcmp(region, expected) != 0) {
+        sysLogPrintf(LOG_ERROR, "romconvert: ROM region '%s' does not match target '%s'",
+                     region, expected);
         return -1;
     }
     if (rcVitaConvert(romImg, romSize, region))

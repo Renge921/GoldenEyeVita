@@ -87,11 +87,16 @@ unsigned char *g_pc_animdata_base = NULL;
 static const char *romFileCandidates(void)
 {
 #if GE007_IS_PAL
-    return "ge007.pal-final.z64|baserom.e.z64";
+    return "ge007.pal-final.z64|baserom.e.z64|ge007.e.z64|goldeneye.pal.z64|goldeneye.e.z64|goldeneye.z64|ge007.z64";
 #elif defined(VERSION_JP)
-    return "ge007.jpn-final.z64|baserom.j.z64|ge007.j.z64";
+    return "ge007.jpn-final.z64|baserom.j.z64|ge007.j.z64|baserom.jp.z64|ge007.jp.z64|"
+           "goldeneye.j.z64|goldeneye.jp.z64|goldeneye.z64|ge007.z64|GoldenEye.z64|"
+           "ge007.jpn-final.n64|baserom.j.n64|ge007.j.n64|goldeneye.n64|ge007.n64|"
+           "ge007.jpn-final.v64|baserom.j.v64|ge007.j.v64|goldeneye.v64|ge007.v64";
 #else
-    return "ge007.ntsc-final.z64|baserom.u.z64";
+    return "ge007.ntsc-final.z64|baserom.u.z64|ge007.u.z64|goldeneye.z64|ge007.z64|GoldenEye.z64|"
+           "ge007.ntsc-final.n64|baserom.u.n64|goldeneye.n64|ge007.n64|"
+           "ge007.ntsc-final.v64|baserom.u.v64|goldeneye.v64|ge007.v64";
 #endif
 }
 
@@ -347,6 +352,27 @@ int romdataInit(void)
         if (!ok) {
             free(img);
             continue;
+        }
+
+        /* Auto byte-swap byte-swapped (.v64) or little-endian (.n64) ROMs to big-endian (.z64) */
+        if (romSize >= 4) {
+            if (img[0] == 0x37 && img[1] == 0x80 && img[2] == 0x40 && img[3] == 0x12) {
+                sysLogPrintf(LOG_INFO, "romdataInit: auto-converting byte-swapped (.v64) ROM to big-endian");
+                for (u32 i = 0; i + 1 < romSize; i += 2) {
+                    u8 tmp = img[i];
+                    img[i] = img[i + 1];
+                    img[i + 1] = tmp;
+                }
+            } else if (img[0] == 0x40 && img[1] == 0x12 && img[2] == 0x37 && img[3] == 0x80) {
+                sysLogPrintf(LOG_INFO, "romdataInit: auto-converting little-endian (.n64) ROM to big-endian");
+                for (u32 i = 0; i + 3 < romSize; i += 4) {
+                    u8 b0 = img[i], b1 = img[i + 1], b2 = img[i + 2], b3 = img[i + 3];
+                    img[i] = b3;
+                    img[i + 1] = b2;
+                    img[i + 2] = b1;
+                    img[i + 3] = b0;
+                }
+            }
         }
 
         if (romSize < 0x40 || !romHeaderValid(img, err, sizeof(err))) {

@@ -24,7 +24,7 @@
 - **日本語版ROMアセット抽出の修正**: 上流 CSV（`scripts/filelist.j.csv`）のタイポを修正し、日本語版アセットシンボル（`port/src/romassets_j.s`）を正常生成。
 - **実機アセットコンバータの拡張**: `tools_pc/gen_pcconv_tables.py` および `port/src/pcconv_tables.c` を更新し、日本版ROMのモデル・CG・セットアップをVita実機上で正しく抽出・変換可能に修正。
 - **動的フォントキャッシュとGPUキャッシュの整合**: N64実機のTMEM制約に由来する固定メモリスロット再利用時に、vitaGL のテクスチャキャッシュを即座に破棄（無効化）する処理を追加し、文字化け（Stale Texture Cache Hit）を防止。
-- **ROMローダーの拡張**: 日本版ROMヘッダーおよびカントリーコード `'J'` を正規ROMとして受け付けるように拡張。
+- **ROMローダーの拡張**: 日本版ROMヘッダーおよびカントリーコード `'J'` を正規ROMとして受け付けるように拡張（`.z64` / `.n64` / `.v64` 形式の自動バイトスワップ対応）。
 - **ゲーム内容・機能の詳細について**: ゲーム内容、操作方法、レンダラーの最適化、機能等の詳細については、フォーク元リポジトリ（[kaziema/gevita](https://github.com/kaziema/gevita)）およびアップストリーム（[jkdansereau/goldeneye-pc-port](https://github.com/jkdansereau/goldeneye-pc-port)）を参照してください（今後のフォーク元のアップデート・エンハンスとの仕様乖離を防ぐため、本リポジトリでは重複した詳細説明は省略しています）。
 
 ---
@@ -35,23 +35,25 @@
 - **HENkaku / H-Encore** 等のCFWが導入されたPS Vita
 - **[VitaShell](https://github.com/TheOfficialFloW/VitaShell)**
 - **`libshacccg.suprx`**（ランタイムシェーダーコンパイラ）:
-  - `ur0:data/libshacccg.suprx` に配置されている必要があります。
+  - `ur0:data/libshacccg.suprx` に配置されている必要があります。[SharkF00d](https://github.com/OsirizX/SharkF00d) または [ShaRKBR33D](https://github.com/MuxaJIo/ShaRKBR33D) で導入してください。未導入の場合、3D描画初期化時に終了します。
+- `fd_fix.skprx` または `kubridge.skprx`（一般的なVita Homebrew環境）
 
 ### 2. ROMファイルの準備と配置
-- ご自身で所有・吸い出した正規の **Nintendo 64 日本版ROM**（`.z64` 形式）を用意します。
+- ご自身で所有・吸い出した正規の **Nintendo 64 日本版ROM**（`.z64` / `.n64` / `.v64` 形式）を用意します。
 - PS Vitaのストレージに以下の固定パスで配置します：
   ```text
   ux0:data/GoldenEye007/ge007.jpn-final.z64
   ```
-  ※ または `ux0:data/GoldenEye007/baserom.j.z64` でも認識されます。
+  ※ または `ux0:data/GoldenEye007/baserom.j.z64`（その他 `goldeneye.z64` 等）でも認識されます。
 
 ### 3. VPKのインストール
 - 本リポジトリの [Releases](https://github.com/Renge921/GoldenEyeVita/releases) から最新の `GE007Vita_JP.vpk` をダウンロードします。
-- VitaShell（USB転送またはFTP）等でPS Vitaへ転送し、VitaShell上からインストールします。
+- VitaShell（USB転送またはFTP）等でPS Vitaへ転送し、VitaShell上からインストールします（拡張権限プロンプトを承認）。
 
 ### 4. 起動
 - LiveAreaに追加されたバブルからゲームを起動してください。
-※ 初回起動時は Vita 実機上で ROM からモデルやテクスチャの自動コンバートが行われるため、起動に少し時間がかかります。
+- ※ 初回起動時は Vita 実機上で ROM からモデルやテクスチャの自動コンバートが行われるため、起動に1分程度かかります。
+- ※ 万一起動に失敗する場合は、`ux0:data/GoldenEye007/log.txt` および `ge007.crash.log` に詳細なエラーログが出力されますのでご確認ください。
 
 ---
 

@@ -101,6 +101,12 @@ static void gfx_sdl_init(const struct GfxWindowInitSettings *set) {
      * proven papermario-pc-upload/Ghostship/2ship2harkinian config; the
      * 960x544 here is the Vita's actual screen size, not a window size. */
     sceIoMkdir("ux0:data/GoldenEye007/shader_cache", 0777);
+    FILE *shaccF = fopen("ur0:data/libshacccg.suprx", "rb");
+    if (!shaccF) {
+        sysLogPrintf(LOG_WARNING, "[video] ur0:data/libshacccg.suprx not found! Shaders require SharkF00d / ShaRKBR33D.");
+    } else {
+        fclose(shaccF);
+    }
     vglSetParamBufferSize(6 * 1024 * 1024);
     {
         static const SceGxmMultisampleMode kMsaa[3] = { SCE_GXM_MULTISAMPLE_NONE, SCE_GXM_MULTISAMPLE_2X, SCE_GXM_MULTISAMPLE_4X };
