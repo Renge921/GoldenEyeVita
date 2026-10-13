@@ -87,8 +87,10 @@ jobs:
           elif [ "${{ github.event_name }}" = "pull_request" ] && \
                [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
             echo "selfhosted=false" >> "$GITHUB_OUTPUT"
-          else
+          elif [ "${{ github.repository }}" = "jkdansereau/goldeneye-pc-port" ]; then
             echo "selfhosted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "selfhosted=false" >> "$GITHUB_OUTPUT"
           fi
 
       - id: filter

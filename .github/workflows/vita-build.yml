@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: vita-vpk-${{ github.ref_name }}
@@ -64,6 +64,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -84,32 +86,17 @@ jobs:
           set -euo pipefail
           TAG="vita-next"
           TITLE="GoldenEye 007 Vita (JP) Next Build"
-          BODY="## GoldenEye 007: PS Vita Port (Japanese ROM Support)
+          NOTES="$(mktemp)"
+          sed -e "s|<source_sha>|${SOURCE_SHA}|g" \
+              -e "s|<short_sha>|${SHORT_SHA}|g" \
+              -e "s|<branch_name>|${BRANCH_NAME}|g" \
+              .github/release-notes-vita.md > "$NOTES"
 
-**Draft build: review these notes and validate on hardware before publishing.**
-
-- **Commit**: \`${SOURCE_SHA}\` (\`${SHORT_SHA}\`)
-- **Branch**: \`${BRANCH_NAME}\`
-- **Target**: 日本語版ROM (NTSC-J) 対応ビルド
-
-### 導入手順
-1. \`GE007Vita_JP.vpk\` をダウンロードし、PS Vita に転送してインストールします。
-2. \`ux0:data/GoldenEye007/\` フォルダにご自身の日本版ゴールデンアイ007 ROM（\`.z64\` 形式、ファイル名: \`ge007.jpn-final.z64\` または \`baserom.j.z64\`）を配置してください。
-3. 初回起動時に実機上でアセットの自動変換が行われ、日本語で起動します。
-
-### 添付ファイル
-- \`GE007Vita_JP.vpk\`: PS Vita アプリケーションパッケージ
-- \`SHA256SUMS.txt\`: SHA-256 チェックサム
-
-*※ 本パッケージにゲームROMや著作権保護されたアセットは一切含まれていません。*
-"
-
-          # Check if the release already exists
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Updating existing release $TAG..."
             gh release edit "$TAG" \
               --title "$TITLE" \
-              --notes "$BODY" \
+              --notes-file "$NOTES" \
               --draft
             gh release upload "$TAG" \
               artifacts/GE007Vita_JP.vpk \
@@ -121,7 +108,7 @@ jobs:
               artifacts/GE007Vita_JP.vpk \
               artifacts/SHA256SUMS.txt \
               --title "$TITLE" \
-              --notes "$BODY" \
+              --notes-file "$NOTES" \
               --draft \
               --target "$SOURCE_SHA"
           fi
