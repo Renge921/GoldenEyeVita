@@ -1,0 +1,134 @@
+name: PS Vita VPK
+
+on:
+  push:
+    branches: [main, vita]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vita-vpk-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Japanese Vita VPK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      source_sha: ${{ steps.info.outputs.source_sha }}
+      short_sha: ${{ steps.info.outputs.short_sha }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Record build metadata
+        id: info
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "source_sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${sha:0:8}" >> "$GITHUB_OUTPUT"
+
+      - name: Install VitaSDK and required libraries
+        run: bash tools/ci/setup_vita_sdk.sh
+
+      - name: Build Japanese VPK
+        run: |
+          export VITASDK=/usr/local/vitasdk
+          export PATH="$VITASDK/bin:$PATH"
+          make -f Makefile.vita all -j"$(nproc)"
+
+      - name: Collect and verify artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp GE007Vita_JP.vpk artifacts/
+          (
+            cd artifacts
+            sha256sum GE007Vita_JP.vpk > SHA256SUMS.txt
+          )
+          cat artifacts/SHA256SUMS.txt
+
+      - name: Upload VPK artifact to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoldenEyeVita-JP-${{ steps.info.outputs.short_sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    name: Create / Update Release Draft
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download VPK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: GoldenEyeVita-JP-${{ needs.build.outputs.short_sha }}
+          path: artifacts
+
+      - name: Create or update rolling release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+          SHORT_SHA: ${{ needs.build.outputs.short_sha }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          TAG="vita-next"
+          TITLE="GoldenEye 007 Vita (JP) Next Build"
+          BODY="## GoldenEye 007: PS Vita Port (Japanese ROM Support)
+
+**Draft build: review these notes and validate on hardware before publishing.**
+
+- **Commit**: \`${SOURCE_SHA}\` (\`${SHORT_SHA}\`)
+- **Branch**: \`${BRANCH_NAME}\`
+- **Target**: 日本語版ROM (NTSC-J) 対応ビルド
+
+### 導入手順
+1. \`GE007Vita_JP.vpk\` をダウンロードし、PS Vita に転送してインストールします。
+2. \`ux0:data/GoldenEye007/\` フォルダにご自身の日本版ゴールデンアイ007 ROM（\`.z64\` 形式、ファイル名: \`ge007.jpn-final.z64\` または \`baserom.j.z64\`）を配置してください。
+3. 初回起動時に実機上でアセットの自動変換が行われ、日本語で起動します。
+
+### 添付ファイル
+- \`GE007Vita_JP.vpk\`: PS Vita アプリケーションパッケージ
+- \`SHA256SUMS.txt\`: SHA-256 チェックサム
+
+*※ 本パッケージにゲームROMや著作権保護されたアセットは一切含まれていません。*
+"
+
+          # Check if the release already exists
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Updating existing release $TAG..."
+            gh release edit "$TAG" \
+              --title "$TITLE" \
+              --notes "$BODY" \
+              --draft
+            gh release upload "$TAG" \
+              artifacts/GE007Vita_JP.vpk \
+              artifacts/SHA256SUMS.txt \
+              --clobber
+          else
+            echo "Creating new release draft $TAG..."
+            gh release create "$TAG" \
+              artifacts/GE007Vita_JP.vpk \
+              artifacts/SHA256SUMS.txt \
+              --title "$TITLE" \
+              --notes "$BODY" \
+              --draft \
+              --target "$SOURCE_SHA"
+          fi
+
+          {
+            echo "### Release Draft Updated"
+            echo "- **Tag**: \`$TAG\`"
+            echo "- **Commit**: \`$SHORT_SHA\`"
+            echo "- Check the [Releases](https://github.com/${{ github.repository }}/releases) page to inspect the draft."
+          } >> "$GITHUB_STEP_SUMMARY"
